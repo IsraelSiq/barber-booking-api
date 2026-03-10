@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from database import Base, engine
-from routes import clientes, agendamentos, auth
+from routes import clientes, agendamentos, auth, admin
 
 Base.metadata.create_all(bind=engine)
 
@@ -13,6 +13,7 @@ app = FastAPI(
 app.include_router(auth.router, prefix="/auth", tags=["Autenticação"])
 app.include_router(clientes.router, prefix="/clientes", tags=["Clientes"])
 app.include_router(agendamentos.router, prefix="/agendamentos", tags=["Agendamentos"])
+app.include_router(admin.router, prefix="/admin", tags=["Admin"])
 
 
 @app.get("/")
