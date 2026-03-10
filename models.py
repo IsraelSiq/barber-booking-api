@@ -12,6 +12,7 @@ class Cliente(Base):
     email = Column(String, unique=True, nullable=False)
     senha = Column(String, nullable=False)
     endereco = Column(String, nullable=True)
+    role = Column(String, default="cliente")  # "cliente" ou "admin"
     criado_em = Column(DateTime, default=datetime.utcnow)
 
 

@@ -49,3 +49,14 @@ def get_cliente_atual(
     if cliente is None:
         raise erro
     return cliente
+
+
+def require_admin(
+    cliente_atual: Cliente = Depends(get_cliente_atual)
+):
+    if cliente_atual.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acesso restrito a administradores."
+        )
+    return cliente_atual

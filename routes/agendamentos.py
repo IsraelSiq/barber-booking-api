@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import Agendamento, Cliente
 from schemas import AgendamentoCreate, AgendamentoResponse
-from auth import get_cliente_atual
+from auth import get_cliente_atual, require_admin
 from datetime import date
 from typing import List
 
@@ -65,6 +65,28 @@ def meus_agendamentos(
     return db.query(Agendamento).filter(
         Agendamento.cliente_id == cliente_atual.id
     ).all()
+
+
+@router.get("/dia", response_model=List[AgendamentoResponse])
+def agendamentos_do_dia(
+    data: str,
+    db: Session = Depends(get_db),
+    admin: Cliente = Depends(require_admin)
+):
+    """Painel do barbeiro — lista todos os agendamentos de um dia. Requer role admin."""
+    try:
+        data_obj = date.fromisoformat(data)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Formato de data inválido. Use YYYY-MM-DD.")
+
+    agendamentos = db.query(Agendamento).filter(
+        Agendamento.status == "confirmado"
+    ).all()
+
+    return [
+        ag for ag in agendamentos
+        if ag.data_hora.date() == data_obj
+    ]
 
 
 @router.get("/{agendamento_id}", response_model=AgendamentoResponse)
