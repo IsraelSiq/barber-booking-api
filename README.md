@@ -1,59 +1,74 @@
 # 💈 Barber Booking API
 
-API REST para sistema de agendamento de barbearia. Permite cadastro de clientes, consulta de horários disponíveis e gerenciamento de agendamentos.
+API REST para sistema de agendamento de barbearia. Permite cadastro de clientes, consulta de horários disponíveis e gerenciamento de agendamentos com autenticação JWT.
 
 Desenvolvida com **FastAPI** e banco de dados **SQLite**, pronta para ser consumida por qualquer front-end (React Native, Flutter, web).
 
+## 🌐 Demo ao vivo
+
+> **API online:** https://web-production-e3626.up.railway.app
+>
+> **Documentação interativa:** https://web-production-e3626.up.railway.app/docs
+
 ## 🖥️ Funcionalidades
 
-- 👤 Cadastro e listagem de clientes
+- 🔐 Autenticação JWT (register, login e token Bearer)
+- 👤 Cadastro de clientes com senha criptografada (bcrypt)
 - 📅 Listar horários disponíveis por data
-- ✅ Criar agendamento
+- ✅ Criar agendamento autenticado
+- 🗓️ Ver meus agendamentos
 - ❌ Cancelar agendamento
 - 📚 Documentação automática em `/docs`
 
-## 🚀 Como rodar
+## 🚀 Como rodar localmente
 
 ```bash
 # 1. Clone o repositório
-git clone https://github.com/Wallisbr/barber-booking-api.git
+git clone https://github.com/IsraelSiq/barber-booking-api.git
 cd barber-booking-api
 
 # 2. Instale as dependências
 pip install -r requirements.txt
 
 # 3. Inicie o servidor
-uvicorn main:app --reload
+python -m uvicorn main:app --reload
 ```
 
 Acesse a documentação interativa em: **http://localhost:8000/docs**
 
 ## 📡 Endpoints
 
+### Autenticação
+| Método | Rota | Descrição |
+|---|---|---|
+| `POST` | `/auth/register` | Cadastrar novo cliente |
+| `POST` | `/auth/login` | Login e geração de token JWT |
+
 ### Clientes
 | Método | Rota | Descrição |
 |---|---|---|
-| `POST` | `/clientes/` | Cadastrar novo cliente |
 | `GET` | `/clientes/` | Listar todos os clientes |
 | `GET` | `/clientes/{id}` | Buscar cliente por ID |
 
 ### Agendamentos
-| Método | Rota | Descrição |
-|---|---|---|
-| `GET` | `/agendamentos/disponíveis?data=2026-03-10` | Horários disponíveis |
-| `POST` | `/agendamentos/` | Criar agendamento |
-| `GET` | `/agendamentos/{id}` | Buscar agendamento |
-| `DELETE` | `/agendamentos/{id}` | Cancelar agendamento |
+| Método | Rota | Descrição | Auth |
+|---|---|---|---|
+| `GET` | `/agendamentos/disponiveis?data=YYYY-MM-DD` | Horários disponíveis | ❌ |
+| `POST` | `/agendamentos/` | Criar agendamento | ✅ |
+| `GET` | `/agendamentos/meus` | Meus agendamentos | ✅ |
+| `DELETE` | `/agendamentos/{id}` | Cancelar agendamento | ✅ |
 
 ## 📁 Estrutura
 
 ```
 barber-booking-api/
 ├── main.py              # App principal FastAPI
+├── auth.py              # Lógica JWT e autenticação
 ├── database.py          # Conexão SQLite + SQLAlchemy
 ├── models.py            # Modelos do banco de dados
 ├── schemas.py           # Validação de dados (Pydantic)
 ├── routes/
+│   ├── auth.py          # Rotas de registro e login
 │   ├── clientes.py      # Rotas de clientes
 │   └── agendamentos.py  # Rotas de agendamentos
 ├── requirements.txt
@@ -69,5 +84,7 @@ barber-booking-api/
 - `FastAPI` — framework web moderno e rápido
 - `SQLAlchemy` — ORM para manipulação do banco
 - `Pydantic` — validação de dados
+- `python-jose` — geração e validação de tokens JWT
+- `passlib + bcrypt` — criptografia de senhas
 - `Uvicorn` — servidor ASGI
 - `SQLite` — banco de dados local
