@@ -1,0 +1,35 @@
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy.orm import Session
+from database import get_db
+from models import Cliente
+from schemas import ClienteCreate, ClienteResponse, TokenResponse
+from auth import hash_senha, verificar_senha, criar_token
+
+router = APIRouter()
+
+
+@router.post("/register", response_model=ClienteResponse)
+def register(cliente: ClienteCreate, db: Session = Depends(get_db)):
+    existente = db.query(Cliente).filter(Cliente.email == cliente.email).first()
+    if existente:
+        raise HTTPException(status_code=400, detail="Email já cadastrado.")
+    dados = cliente.model_dump()
+    dados["senha"] = hash_senha(dados["senha"])
+    novo = Cliente(**dados)
+    db.add(novo)
+    db.commit()
+    db.refresh(novo)
+    return novo
+
+
+@router.post("/login", response_model=TokenResponse)
+def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    cliente = db.query(Cliente).filter(Cliente.email == form.username).first()
+    if not cliente or not verificar_senha(form.password, cliente.senha):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Email ou senha incorretos."
+        )
+    token = criar_token({"sub": cliente.email})
+    return {"access_token": token, "token_type": "bearer"}

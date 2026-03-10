@@ -1,6 +1,12 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
+
+
+# --- Auth ---
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str
 
 
 # --- Clientes ---
@@ -8,6 +14,7 @@ class ClienteCreate(BaseModel):
     nome: str
     telefone: str
     email: str
+    senha: str
     endereco: Optional[str] = None
 
 
@@ -25,7 +32,6 @@ class ClienteResponse(BaseModel):
 
 # --- Agendamentos ---
 class AgendamentoCreate(BaseModel):
-    cliente_id: int
     data_hora: datetime
     servico: Optional[str] = "Corte"
 

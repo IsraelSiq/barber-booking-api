@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
-from models import Agendamento
+from models import Agendamento, Cliente
 from schemas import AgendamentoCreate, AgendamentoResponse
-from datetime import datetime, date, timedelta
+from auth import get_cliente_atual
+from datetime import date
 from typing import List
 
 router = APIRouter()
@@ -33,7 +34,11 @@ def horarios_disponiveis(data: str, db: Session = Depends(get_db)):
 
 
 @router.post("/", response_model=AgendamentoResponse)
-def criar_agendamento(agendamento: AgendamentoCreate, db: Session = Depends(get_db)):
+def criar_agendamento(
+    agendamento: AgendamentoCreate,
+    db: Session = Depends(get_db),
+    cliente_atual: Cliente = Depends(get_cliente_atual)
+):
     conflito = db.query(Agendamento).filter(
         Agendamento.data_hora == agendamento.data_hora,
         Agendamento.status == "confirmado"
@@ -41,11 +46,25 @@ def criar_agendamento(agendamento: AgendamentoCreate, db: Session = Depends(get_
     if conflito:
         raise HTTPException(status_code=400, detail="Horário já ocupado.")
 
-    novo = Agendamento(**agendamento.model_dump())
+    novo = Agendamento(
+        cliente_id=cliente_atual.id,
+        data_hora=agendamento.data_hora,
+        servico=agendamento.servico
+    )
     db.add(novo)
     db.commit()
     db.refresh(novo)
     return novo
+
+
+@router.get("/meus", response_model=List[AgendamentoResponse])
+def meus_agendamentos(
+    db: Session = Depends(get_db),
+    cliente_atual: Cliente = Depends(get_cliente_atual)
+):
+    return db.query(Agendamento).filter(
+        Agendamento.cliente_id == cliente_atual.id
+    ).all()
 
 
 @router.get("/{agendamento_id}", response_model=AgendamentoResponse)
@@ -57,10 +76,17 @@ def buscar_agendamento(agendamento_id: int, db: Session = Depends(get_db)):
 
 
 @router.delete("/{agendamento_id}")
-def cancelar_agendamento(agendamento_id: int, db: Session = Depends(get_db)):
-    ag = db.query(Agendamento).filter(Agendamento.id == agendamento_id).first()
+def cancelar_agendamento(
+    agendamento_id: int,
+    db: Session = Depends(get_db),
+    cliente_atual: Cliente = Depends(get_cliente_atual)
+):
+    ag = db.query(Agendamento).filter(
+        Agendamento.id == agendamento_id,
+        Agendamento.cliente_id == cliente_atual.id
+    ).first()
     if not ag:
-        raise HTTPException(status_code=404, detail="Agendamento não encontrado.")
+        raise HTTPException(status_code=404, detail="Agendamento não encontrado ou não pertence a você.")
     ag.status = "cancelado"
     db.commit()
     return {"message": f"Agendamento {agendamento_id} cancelado com sucesso."}
