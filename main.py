@@ -1,6 +1,8 @@
 from fastapi import FastAPI
-from database import Base, engine
+from database import Base, engine, get_db
 from routes import clientes, agendamentos, auth, admin
+from models import Cliente
+from auth import hash_senha
 
 Base.metadata.create_all(bind=engine)
 
@@ -14,6 +16,22 @@ app.include_router(auth.router, prefix="/auth", tags=["Autenticação"])
 app.include_router(clientes.router, prefix="/clientes", tags=["Clientes"])
 app.include_router(agendamentos.router, prefix="/agendamentos", tags=["Agendamentos"])
 app.include_router(admin.router, prefix="/admin", tags=["Admin"])
+
+
+@app.on_event("startup")
+def criar_admin_padrao():
+    db = next(get_db())
+    existe = db.query(Cliente).filter(Cliente.email == "admin@barber.com").first()
+    if not existe:
+        admin_user = Cliente(
+            nome="Admin",
+            telefone="00000000000",
+            email="admin@barber.com",
+            senha=hash_senha("admin123"),
+            role="admin"
+        )
+        db.add(admin_user)
+        db.commit()
 
 
 @app.get("/")
