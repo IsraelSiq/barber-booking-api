@@ -1,0 +1,66 @@
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from database import get_db
+from models import Agendamento
+from schemas import AgendamentoCreate, AgendamentoResponse
+from datetime import datetime, date, timedelta
+from typing import List
+
+router = APIRouter()
+
+HORARIOS = ["09:00", "10:00", "11:00", "14:00", "15:00", "16:00", "17:00"]
+
+
+@router.get("/disponiveis")
+def horarios_disponiveis(data: str, db: Session = Depends(get_db)):
+    try:
+        data_obj = date.fromisoformat(data)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Formato de data inválido. Use YYYY-MM-DD.")
+
+    agendados = db.query(Agendamento).filter(
+        Agendamento.status == "confirmado"
+    ).all()
+
+    horarios_ocupados = [
+        a.data_hora.strftime("%H:%M")
+        for a in agendados
+        if a.data_hora.date() == data_obj
+    ]
+
+    disponiveis = [h for h in HORARIOS if h not in horarios_ocupados]
+    return {"data": data, "horarios_disponiveis": disponiveis}
+
+
+@router.post("/", response_model=AgendamentoResponse)
+def criar_agendamento(agendamento: AgendamentoCreate, db: Session = Depends(get_db)):
+    conflito = db.query(Agendamento).filter(
+        Agendamento.data_hora == agendamento.data_hora,
+        Agendamento.status == "confirmado"
+    ).first()
+    if conflito:
+        raise HTTPException(status_code=400, detail="Horário já ocupado.")
+
+    novo = Agendamento(**agendamento.model_dump())
+    db.add(novo)
+    db.commit()
+    db.refresh(novo)
+    return novo
+
+
+@router.get("/{agendamento_id}", response_model=AgendamentoResponse)
+def buscar_agendamento(agendamento_id: int, db: Session = Depends(get_db)):
+    ag = db.query(Agendamento).filter(Agendamento.id == agendamento_id).first()
+    if not ag:
+        raise HTTPException(status_code=404, detail="Agendamento não encontrado.")
+    return ag
+
+
+@router.delete("/{agendamento_id}")
+def cancelar_agendamento(agendamento_id: int, db: Session = Depends(get_db)):
+    ag = db.query(Agendamento).filter(Agendamento.id == agendamento_id).first()
+    if not ag:
+        raise HTTPException(status_code=404, detail="Agendamento não encontrado.")
+    ag.status = "cancelado"
+    db.commit()
+    return {"message": f"Agendamento {agendamento_id} cancelado com sucesso."}

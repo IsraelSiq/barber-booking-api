@@ -1,0 +1,9 @@
+# Banco de dados
+*.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+venv/
