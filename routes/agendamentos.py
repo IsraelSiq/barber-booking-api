@@ -5,7 +5,7 @@ from models import Agendamento, Cliente, Endereco, BloqueioHorario
 from schemas import AgendamentoCreate, AgendamentoResponse
 from auth import get_cliente_atual, require_admin
 from datetime import date
-from typing import List
+from typing import List, Optional
 
 router = APIRouter()
 
@@ -83,6 +83,14 @@ def meus_agendamentos(
     return db.query(Agendamento).filter(Agendamento.cliente_id == cliente_atual.id).all()
 
 
+@router.get("/todos", response_model=List[AgendamentoResponse])
+def todos_agendamentos(
+    db: Session = Depends(get_db),
+    admin: Cliente = Depends(require_admin)
+):
+    return db.query(Agendamento).all()
+
+
 @router.get("/{agendamento_id}", response_model=AgendamentoResponse)
 def buscar_agendamento(agendamento_id: int, db: Session = Depends(get_db)):
     ag = db.query(Agendamento).filter(Agendamento.id == agendamento_id).first()
@@ -94,15 +102,24 @@ def buscar_agendamento(agendamento_id: int, db: Session = Depends(get_db)):
 @router.delete("/{agendamento_id}")
 def cancelar_agendamento(
     agendamento_id: int,
+    motivo: Optional[str] = None,
     db: Session = Depends(get_db),
     cliente_atual: Cliente = Depends(get_cliente_atual)
 ):
-    ag = db.query(Agendamento).filter(
-        Agendamento.id == agendamento_id,
-        Agendamento.cliente_id == cliente_atual.id
-    ).first()
+    # Admin pode cancelar qualquer agendamento; cliente só cancela o próprio
+    if cliente_atual.role == "admin":
+        ag = db.query(Agendamento).filter(Agendamento.id == agendamento_id).first()
+    else:
+        ag = db.query(Agendamento).filter(
+            Agendamento.id == agendamento_id,
+            Agendamento.cliente_id == cliente_atual.id
+        ).first()
+
     if not ag:
         raise HTTPException(status_code=404, detail="Agendamento não encontrado.")
+
     ag.status = "cancelado"
+    ag.cancelado_por = "barbeiro" if cliente_atual.role == "admin" else "cliente"
+    ag.motivo_cancelamento = motivo or ("Cancelado pelo barbeiro." if cliente_atual.role == "admin" else None)
     db.commit()
     return {"message": f"Agendamento {agendamento_id} cancelado."}

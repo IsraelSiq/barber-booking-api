@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Date
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Date, Boolean
 from database import Base
 from datetime import datetime
 
@@ -12,6 +12,7 @@ class Cliente(Base):
     email = Column(String, unique=True, nullable=False)
     senha = Column(String, nullable=False)
     role = Column(String, default="cliente")
+    precisa_redefinir = Column(Boolean, default=False)
     criado_em = Column(DateTime, default=datetime.utcnow)
 
 
@@ -39,6 +40,7 @@ class Agendamento(Base):
     servico = Column(String, default="Corte")
     status = Column(String, default="confirmado")
     motivo_cancelamento = Column(String, nullable=True)
+    cancelado_por = Column(String, nullable=True)
     criado_em = Column(DateTime, default=datetime.utcnow)
 
 

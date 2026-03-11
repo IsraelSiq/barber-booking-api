@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import Cliente
 from schemas import ClienteCreate, ClienteResponse
+from auth import hash_senha, require_admin, get_cliente_atual
 from typing import List
 
 router = APIRouter()
@@ -31,3 +32,18 @@ def buscar_cliente(cliente_id: int, db: Session = Depends(get_db)):
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente não encontrado.")
     return cliente
+
+
+@router.post("/{cliente_id}/reset-senha")
+def reset_senha_admin(
+    cliente_id: int,
+    db: Session = Depends(get_db),
+    admin: Cliente = Depends(require_admin)
+):
+    cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado.")
+    cliente.senha = hash_senha("teste123")
+    cliente.precisa_redefinir = True
+    db.commit()
+    return {"message": f"Senha de {cliente.nome} resetada com sucesso. Ela precisará redefinir no próximo login."}

@@ -7,6 +7,7 @@ from typing import Optional
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str
+    precisa_redefinir: bool = False
 
 
 # --- Clientes ---
@@ -28,10 +29,15 @@ class ClienteResponse(BaseModel):
     telefone: str
     email: str
     role: str
+    precisa_redefinir: bool
     criado_em: datetime
 
     class Config:
         from_attributes = True
+
+
+class RedefinirSenhaRequest(BaseModel):
+    nova_senha: str
 
 
 # --- Enderecos ---
@@ -73,6 +79,8 @@ class AgendamentoResponse(BaseModel):
     data_hora: datetime
     servico: str
     status: str
+    cancelado_por: Optional[str] = None
+    motivo_cancelamento: Optional[str] = None
     criado_em: datetime
 
     class Config:
