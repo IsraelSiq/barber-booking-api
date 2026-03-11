@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
-from models import Agendamento, Cliente, Endereco
+from models import Agendamento, Cliente, Endereco, BloqueioHorario
 from schemas import AgendamentoCreate, AgendamentoResponse
 from auth import get_cliente_atual, require_admin
 from datetime import date
@@ -17,15 +17,15 @@ def horarios_disponiveis(data: str, db: Session = Depends(get_db)):
     try:
         data_obj = date.fromisoformat(data)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Formato de data inválido. Use YYYY-MM-DD.")
+        raise HTTPException(status_code=400, detail="Formato de data inválido.")
 
     agendados = db.query(Agendamento).filter(Agendamento.status == "confirmado").all()
-    horarios_ocupados = [
-        a.data_hora.strftime("%H:%M")
-        for a in agendados
-        if a.data_hora.date() == data_obj
-    ]
-    disponiveis = [h for h in HORARIOS if h not in horarios_ocupados]
+    horarios_ocupados = [a.data_hora.strftime("%H:%M") for a in agendados if a.data_hora.date() == data_obj]
+
+    bloqueios = db.query(BloqueioHorario).filter(BloqueioHorario.data == data_obj).all()
+    horarios_bloqueados = [b.horario for b in bloqueios]
+
+    disponiveis = [h for h in HORARIOS if h not in horarios_ocupados and h not in horarios_bloqueados]
     return {"data": data, "horarios_disponiveis": disponiveis}
 
 
@@ -35,24 +35,27 @@ def criar_agendamento(
     db: Session = Depends(get_db),
     cliente_atual: Cliente = Depends(get_cliente_atual)
 ):
-    # Valida hora cheia
     if agendamento.data_hora.minute != 0:
         raise HTTPException(status_code=400, detail="Agendamentos apenas em horas cheias.")
 
-    # Valida horário permitido
     horario_solicitado = agendamento.data_hora.strftime("%H:%M")
     if horario_solicitado not in HORARIOS:
-        raise HTTPException(status_code=400, detail=f"Horário {horario_solicitado} não disponível. Permitidos: {', '.join(HORARIOS)}")
+        raise HTTPException(status_code=400, detail=f"Horário {horario_solicitado} não permitido.")
 
-    # Valida se o endereço pertence ao cliente
     endereco = db.query(Endereco).filter(
         Endereco.id == agendamento.endereco_id,
         Endereco.cliente_id == cliente_atual.id
     ).first()
     if not endereco:
-        raise HTTPException(status_code=400, detail="Endereço inválido ou não pertence a você.")
+        raise HTTPException(status_code=400, detail="Endereço inválido.")
 
-    # Verifica conflito de horário
+    bloqueio = db.query(BloqueioHorario).filter(
+        BloqueioHorario.data == agendamento.data_hora.date(),
+        BloqueioHorario.horario == horario_solicitado
+    ).first()
+    if bloqueio:
+        raise HTTPException(status_code=400, detail="Horário bloqueado pelo barbeiro.")
+
     conflito = db.query(Agendamento).filter(
         Agendamento.data_hora == agendamento.data_hora,
         Agendamento.status == "confirmado"
@@ -80,20 +83,6 @@ def meus_agendamentos(
     return db.query(Agendamento).filter(Agendamento.cliente_id == cliente_atual.id).all()
 
 
-@router.get("/dia", response_model=List[AgendamentoResponse])
-def agendamentos_do_dia(
-    data: str,
-    db: Session = Depends(get_db),
-    admin: Cliente = Depends(require_admin)
-):
-    try:
-        data_obj = date.fromisoformat(data)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Formato de data inválido.")
-    agendamentos = db.query(Agendamento).filter(Agendamento.status == "confirmado").all()
-    return [ag for ag in agendamentos if ag.data_hora.date() == data_obj]
-
-
 @router.get("/{agendamento_id}", response_model=AgendamentoResponse)
 def buscar_agendamento(agendamento_id: int, db: Session = Depends(get_db)):
     ag = db.query(Agendamento).filter(Agendamento.id == agendamento_id).first()
@@ -113,7 +102,7 @@ def cancelar_agendamento(
         Agendamento.cliente_id == cliente_atual.id
     ).first()
     if not ag:
-        raise HTTPException(status_code=404, detail="Agendamento não encontrado ou não pertence a você.")
+        raise HTTPException(status_code=404, detail="Agendamento não encontrado.")
     ag.status = "cancelado"
     db.commit()
-    return {"message": f"Agendamento {agendamento_id} cancelado com sucesso."}
+    return {"message": f"Agendamento {agendamento_id} cancelado."}

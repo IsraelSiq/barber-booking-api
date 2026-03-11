@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Date
 from database import Base
 from datetime import datetime
 
@@ -20,7 +20,7 @@ class Endereco(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=False)
-    apelido = Column(String, nullable=False)  # "Casa", "Trabalho"
+    apelido = Column(String, nullable=False)
     rua = Column(String, nullable=False)
     numero = Column(String, nullable=False)
     bairro = Column(String, nullable=False)
@@ -38,4 +38,15 @@ class Agendamento(Base):
     data_hora = Column(DateTime, nullable=False)
     servico = Column(String, default="Corte")
     status = Column(String, default="confirmado")
+    motivo_cancelamento = Column(String, nullable=True)
+    criado_em = Column(DateTime, default=datetime.utcnow)
+
+
+class BloqueioHorario(Base):
+    __tablename__ = "bloqueios_horario"
+
+    id = Column(Integer, primary_key=True, index=True)
+    data = Column(Date, nullable=False)
+    horario = Column(String, nullable=False)
+    motivo = Column(String, nullable=True)
     criado_em = Column(DateTime, default=datetime.utcnow)
