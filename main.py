@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from database import Base, engine, get_db
 from routes import clientes, agendamentos, auth, admin
 from models import Cliente
@@ -10,6 +11,14 @@ app = FastAPI(
     title="Barber Booking API",
     description="API para agendamento de barbearia com autenticação JWT",
     version="2.0.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(auth.router, prefix="/auth", tags=["Autenticação"])
