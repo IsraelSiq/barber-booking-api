@@ -9,7 +9,7 @@ from typing import List
 
 router = APIRouter()
 
-HORARIOS = ["09:00", "10:00", "11:00", "14:00", "15:00", "16:00", "17:00"]
+HORARIOS = ["09:00", "10:00", "11:00", "14:00", "15:00", "16:00", "17:00", "18:00"]
 
 
 @router.get("/disponiveis")
@@ -39,6 +39,13 @@ def criar_agendamento(
     db: Session = Depends(get_db),
     cliente_atual: Cliente = Depends(get_cliente_atual)
 ):
+    # Bloqueia horário quebrado (ex: 09:30, 14:45)
+    if agendamento.data_hora.minute != 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Agendamentos apenas em horas cheias (ex: 09:00, 14:00)."
+        )
+
     # Valida se o horário está na lista permitida
     horario_solicitado = agendamento.data_hora.strftime("%H:%M")
     if horario_solicitado not in HORARIOS:
