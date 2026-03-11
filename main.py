@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from database import Base, engine, get_db
 from routes import clientes, agendamentos, auth, admin
+from routes import enderecos
 from models import Cliente
 from auth import hash_senha
 
@@ -10,7 +11,7 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="Barber Booking API",
     description="API para agendamento de barbearia com autenticação JWT",
-    version="2.0.0"
+    version="3.0.0"
 )
 
 app.add_middleware(
@@ -24,6 +25,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/auth", tags=["Autenticação"])
 app.include_router(clientes.router, prefix="/clientes", tags=["Clientes"])
 app.include_router(agendamentos.router, prefix="/agendamentos", tags=["Agendamentos"])
+app.include_router(enderecos.router, prefix="/enderecos", tags=["Endereços"])
 app.include_router(admin.router, prefix="/admin", tags=["Admin"])
 
 
@@ -45,4 +47,4 @@ def criar_admin_padrao():
 
 @app.get("/")
 def root():
-    return {"message": "Barber Booking API 💈", "docs": "/docs", "version": "2.0.0"}
+    return {"message": "Barber Booking API 💈", "docs": "/docs", "version": "3.0.0"}

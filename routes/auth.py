@@ -3,8 +3,8 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from database import get_db
 from models import Cliente
-from schemas import ClienteCreate, ClienteResponse, TokenResponse
-from auth import hash_senha, verificar_senha, criar_token
+from schemas import ClienteCreate, ClienteUpdate, ClienteResponse, TokenResponse
+from auth import hash_senha, verificar_senha, criar_token, get_cliente_atual
 
 router = APIRouter()
 
@@ -33,3 +33,23 @@ def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get
         )
     token = criar_token({"sub": cliente.email})
     return {"access_token": token, "token_type": "bearer"}
+
+
+@router.get("/me", response_model=ClienteResponse)
+def me(cliente_atual: Cliente = Depends(get_cliente_atual)):
+    return cliente_atual
+
+
+@router.put("/me", response_model=ClienteResponse)
+def atualizar_me(
+    dados: ClienteUpdate,
+    db: Session = Depends(get_db),
+    cliente_atual: Cliente = Depends(get_cliente_atual)
+):
+    if dados.nome is not None:
+        cliente_atual.nome = dados.nome
+    if dados.telefone is not None:
+        cliente_atual.telefone = dados.telefone
+    db.commit()
+    db.refresh(cliente_atual)
+    return cliente_atual
