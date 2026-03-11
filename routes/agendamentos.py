@@ -39,6 +39,14 @@ def criar_agendamento(
     db: Session = Depends(get_db),
     cliente_atual: Cliente = Depends(get_cliente_atual)
 ):
+    # Valida se o horário está na lista permitida
+    horario_solicitado = agendamento.data_hora.strftime("%H:%M")
+    if horario_solicitado not in HORARIOS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Horário {horario_solicitado} não está disponível. Horários permitidos: {', '.join(HORARIOS)}"
+        )
+
     conflito = db.query(Agendamento).filter(
         Agendamento.data_hora == agendamento.data_hora,
         Agendamento.status == "confirmado"
