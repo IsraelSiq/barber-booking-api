@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
 from models import Agendamento, Cliente, Endereco, BloqueioHorario
-from auth import require_admin
+from auth import require_admin, hash_senha
+from notifications import notification_service
 from datetime import date, datetime
 from typing import List, Optional
 from pydantic import BaseModel
@@ -79,9 +80,18 @@ def cancelar_pelo_barbeiro(
     ag = db.query(Agendamento).filter(Agendamento.id == agendamento_id).first()
     if not ag:
         raise HTTPException(status_code=404, detail="Agendamento não encontrado.")
+    cliente = db.query(Cliente).filter(Cliente.id == ag.cliente_id).first()
     ag.status = "cancelado_barbeiro"
     ag.motivo_cancelamento = body.motivo
+    ag.cancelado_por = "barbeiro"
     db.commit()
+    if cliente:
+        notification_service.send_booking_cancelled_by_barber(
+            email=cliente.email,
+            nome=cliente.nome,
+            data_hora=ag.data_hora.strftime("%d/%m/%Y às %H:%M"),
+            motivo=body.motivo
+        )
     return {"message": "Agendamento cancelado.", "motivo": body.motivo}
 
 
@@ -91,7 +101,40 @@ def listar_clientes(
     admin: Cliente = Depends(require_admin)
 ):
     clientes = db.query(Cliente).filter(Cliente.role == "cliente").all()
-    return [{"id": c.id, "nome": c.nome, "telefone": c.telefone, "email": c.email, "criado_em": c.criado_em} for c in clientes]
+    return [
+        {
+            "id": c.id,
+            "nome": c.nome,
+            "telefone": c.telefone,
+            "email": c.email,
+            "precisa_redefinir": c.precisa_redefinir,
+            "criado_em": c.criado_em
+        }
+        for c in clientes
+    ]
+
+
+# --- Issue #9: Reset de senha forçado pelo admin ---
+@router.post("/clientes/{cliente_id}/reset-senha")
+def reset_senha_admin(
+    cliente_id: int,
+    db: Session = Depends(get_db),
+    admin: Cliente = Depends(require_admin)
+):
+    """Admin reseta a senha do cliente para 'teste123' e marca precisa_redefinir=True."""
+    cliente = db.query(Cliente).filter(
+        Cliente.id == cliente_id,
+        Cliente.role == "cliente"
+    ).first()
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado.")
+    cliente.senha = hash_senha("teste123")
+    cliente.precisa_redefinir = True
+    db.commit()
+    notification_service.send_forced_reset_by_admin(cliente.email, cliente.nome)
+    return {
+        "message": f"Senha de {cliente.nome} redefinida. Cliente deverá trocar no próximo login."
+    }
 
 
 @router.post("/bloqueios")
