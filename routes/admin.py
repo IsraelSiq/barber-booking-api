@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
 from models import Agendamento, Cliente, Endereco, BloqueioHorario
-from auth import require_admin
+from auth import require_admin, hash_senha
+from notifications import notification_service
 from datetime import date, datetime
 from typing import List, Optional
 from pydantic import BaseModel
@@ -81,7 +82,11 @@ def cancelar_pelo_barbeiro(
         raise HTTPException(status_code=404, detail="Agendamento não encontrado.")
     ag.status = "cancelado_barbeiro"
     ag.motivo_cancelamento = body.motivo
+    ag.cancelado_por = "barbeiro"
     db.commit()
+    cliente = db.query(Cliente).filter(Cliente.id == ag.cliente_id).first()
+    if cliente:
+        notification_service.sendAppointmentCancelled(cliente, ag)
     return {"message": "Agendamento cancelado.", "motivo": body.motivo}
 
 
@@ -91,7 +96,25 @@ def listar_clientes(
     admin: Cliente = Depends(require_admin)
 ):
     clientes = db.query(Cliente).filter(Cliente.role == "cliente").all()
-    return [{"id": c.id, "nome": c.nome, "telefone": c.telefone, "email": c.email, "criado_em": c.criado_em} for c in clientes]
+    return [{"id": c.id, "nome": c.nome, "telefone": c.telefone, "email": c.email, "criado_em": c.criado_em, "precisa_redefinir": c.precisa_redefinir} for c in clientes]
+
+
+@router.post("/clientes/{cliente_id}/reset-senha")
+def reset_senha_cliente(
+    cliente_id: int,
+    db: Session = Depends(get_db),
+    admin: Cliente = Depends(require_admin)
+):
+    """Admin reseta a senha do cliente para 'teste123' e força redefinição no próximo login."""
+    cliente = db.query(Cliente).filter(Cliente.id == cliente_id, Cliente.role == "cliente").first()
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado.")
+    cliente.senha = hash_senha("teste123")
+    cliente.precisa_redefinir = True
+    db.commit()
+    db.refresh(cliente)
+    notification_service.sendAdminPasswordReset(cliente)
+    return {"message": f"Senha de {cliente.nome} redefinida. Cliente deverá criar nova senha no próximo login."}
 
 
 @router.post("/bloqueios")
