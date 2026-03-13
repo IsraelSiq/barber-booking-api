@@ -52,3 +52,14 @@ class BloqueioHorario(Base):
     horario = Column(String, nullable=False)
     motivo = Column(String, nullable=True)
     criado_em = Column(DateTime, default=datetime.utcnow)
+
+
+class PasswordResetToken(Base):
+    __tablename__ = "password_reset_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=False)
+    token = Column(String, unique=True, nullable=False)
+    expira_em = Column(DateTime, nullable=False)
+    usado = Column(Boolean, default=False)
+    criado_em = Column(DateTime, default=datetime.utcnow)

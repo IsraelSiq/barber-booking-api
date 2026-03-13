@@ -40,6 +40,15 @@ class RedefinirSenhaRequest(BaseModel):
     nova_senha: str
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    nova_senha: str
+
+
 # --- Enderecos ---
 class EnderecoCreate(BaseModel):
     apelido: str

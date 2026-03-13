@@ -1,10 +1,17 @@
+import secrets
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from database import get_db
-from models import Cliente
-from schemas import ClienteCreate, ClienteUpdate, ClienteResponse, TokenResponse, RedefinirSenhaRequest
+from models import Cliente, PasswordResetToken
+from schemas import (
+    ClienteCreate, ClienteUpdate, ClienteResponse,
+    TokenResponse, RedefinirSenhaRequest,
+    ForgotPasswordRequest, ResetPasswordRequest
+)
 from auth import hash_senha, verificar_senha, criar_token, get_cliente_atual
+from notifications import notification_service
 
 router = APIRouter()
 
@@ -20,6 +27,7 @@ def register(cliente: ClienteCreate, db: Session = Depends(get_db)):
     db.add(novo)
     db.commit()
     db.refresh(novo)
+    notification_service.sendWelcome(novo)
     return novo
 
 
@@ -71,4 +79,55 @@ def redefinir_senha(
     cliente_atual.precisa_redefinir = False
     db.commit()
     db.refresh(cliente_atual)
+    notification_service.sendPasswordChanged(cliente_atual)
     return cliente_atual
+
+
+@router.post("/forgot-password")
+def forgot_password(body: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    """Gera token de reset de senha válido por 1h. Sempre retorna 200 (segurança)."""
+    cliente = db.query(Cliente).filter(Cliente.email == body.email).first()
+    if cliente:
+        token_str = secrets.token_urlsafe(32)
+        expira = datetime.utcnow() + timedelta(hours=1)
+        reset_token = PasswordResetToken(
+            cliente_id=cliente.id,
+            token=token_str,
+            expira_em=expira
+        )
+        db.add(reset_token)
+        db.commit()
+        notification_service.sendPasswordResetRequested(cliente, token_str)
+    return {"message": "Se o email estiver cadastrado, você receberá as instruções."}
+
+
+@router.get("/reset-password")
+def validar_token_reset(token: str, db: Session = Depends(get_db)):
+    """Valida se o token de reset é válido e não expirou."""
+    reset = db.query(PasswordResetToken).filter(
+        PasswordResetToken.token == token,
+        PasswordResetToken.usado == False
+    ).first()
+    if not reset or reset.expira_em < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="Token inválido ou expirado.")
+    return {"valid": True}
+
+
+@router.post("/reset-password")
+def reset_password(body: ResetPasswordRequest, db: Session = Depends(get_db)):
+    """Redefine a senha usando o token de reset."""
+    reset = db.query(PasswordResetToken).filter(
+        PasswordResetToken.token == body.token,
+        PasswordResetToken.usado == False
+    ).first()
+    if not reset or reset.expira_em < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="Token inválido ou expirado.")
+    cliente = db.query(Cliente).filter(Cliente.id == reset.cliente_id).first()
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado.")
+    cliente.senha = hash_senha(body.nova_senha)
+    cliente.precisa_redefinir = False
+    reset.usado = True
+    db.commit()
+    notification_service.sendPasswordChanged(cliente)
+    return {"message": "Senha redefinida com sucesso."}
