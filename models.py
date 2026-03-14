@@ -8,9 +8,10 @@ class Cliente(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     nome = Column(String, nullable=False)
-    telefone = Column(String, nullable=False)
+    telefone = Column(String, nullable=True)
     email = Column(String, unique=True, nullable=False)
-    senha = Column(String, nullable=False)
+    senha = Column(String, nullable=True)
+    google_id = Column(String, nullable=True, unique=True)
     role = Column(String, default="cliente")
     precisa_redefinir = Column(Boolean, default=False)
     criado_em = Column(DateTime, default=datetime.utcnow)

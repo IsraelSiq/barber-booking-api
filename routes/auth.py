@@ -1,4 +1,5 @@
 import secrets
+import httpx
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -12,8 +13,15 @@ from schemas import (
 )
 from auth import hash_senha, verificar_senha, criar_token, get_cliente_atual
 from notifications import notification_service
+from pydantic import BaseModel
 
 router = APIRouter()
+
+GOOGLE_CLIENT_ID = "601696539112-1sj0k9gffuer3es8jbidtpa8l6dee9jk.apps.googleusercontent.com"
+
+
+class GoogleLoginRequest(BaseModel):
+    credential: str
 
 
 @router.post("/register", response_model=ClienteResponse)
@@ -34,7 +42,7 @@ def register(cliente: ClienteCreate, db: Session = Depends(get_db)):
 @router.post("/login", response_model=TokenResponse)
 def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     cliente = db.query(Cliente).filter(Cliente.email == form.username).first()
-    if not cliente or not verificar_senha(form.password, cliente.senha):
+    if not cliente or not cliente.senha or not verificar_senha(form.password, cliente.senha):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Email ou senha incorretos."
@@ -44,6 +52,60 @@ def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get
         "access_token": token,
         "token_type": "bearer",
         "precisa_redefinir": cliente.precisa_redefinir
+    }
+
+
+@router.post("/google", response_model=TokenResponse)
+def login_google(body: GoogleLoginRequest, db: Session = Depends(get_db)):
+    """Valida o token Google e retorna JWT da aplicação."""
+    try:
+        response = httpx.get(
+            f"https://oauth2.googleapis.com/tokeninfo?id_token={body.credential}",
+            timeout=10
+        )
+        info = response.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Erro ao validar token Google.")
+
+    if info.get("aud") != GOOGLE_CLIENT_ID:
+        raise HTTPException(status_code=401, detail="Token Google inválido.")
+
+    email = info.get("email")
+    google_id = info.get("sub")
+    nome = info.get("name", email)
+
+    if not email:
+        raise HTTPException(status_code=400, detail="Email não retornado pelo Google.")
+
+    cliente = db.query(Cliente).filter(Cliente.email == email).first()
+
+    if cliente:
+        # Vincula google_id se ainda não estava vinculado
+        if not cliente.google_id:
+            cliente.google_id = google_id
+            db.commit()
+            db.refresh(cliente)
+    else:
+        # Cria novo usuário via Google
+        cliente = Cliente(
+            nome=nome,
+            email=email,
+            telefone="",
+            senha=None,
+            google_id=google_id,
+            role="cliente",
+            precisa_redefinir=False
+        )
+        db.add(cliente)
+        db.commit()
+        db.refresh(cliente)
+        notification_service.sendWelcome(cliente)
+
+    token = criar_token({"sub": cliente.email})
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "precisa_redefinir": False
     }
 
 
