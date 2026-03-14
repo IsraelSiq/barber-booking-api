@@ -1,6 +1,6 @@
 # 💈 Barber Booking API
 
-> **REST API de agendamento para barbearia** — autenticação JWT, gerenciamento completo de clientes, agendamentos, painel administrativo e recuperação de senha via email.
+> **REST API de agendamento para barbearia** — autenticação JWT, login com Google OAuth2, gerenciamento completo de clientes, agendamentos, painel administrativo e recuperação de senha via email.
 
 [![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
@@ -23,16 +23,17 @@
 
 ## 🧠 Sobre o Projeto
 
-Esta API foi construída com **FastAPI** e segue os princípios REST, oferecendo endpoints para autenticação segura, gerenciamento de clientes, controle de agendamentos e painel administrativo para barbearia. Projetada para ser consumida por qualquer front-end — **React**, **React Native**, **Flutter** ou qualquer cliente HTTP.
+Esta API foi construída com **FastAPI** e segue os princípios REST, oferecendo endpoints para autenticação segura (email/senha e Google OAuth2), gerenciamento de clientes, controle de agendamentos e painel administrativo. Monitorada 24/7 via **UptimeRobot** para garantir disponibilidade em produção.
 
 Destaques técnicos:
 - ⚡ **FastAPI** — performance próxima ao Node.js e Go, com tipagem estática Python
 - 🔐 **JWT Bearer Token** — autenticação stateless e segura
+- 🐈 **Google OAuth2** — login/cadastro via conta Google com validação do token no servidor
 - 🔒 **bcrypt** — hash de senhas com salt automático
 - 🗃️ **SQLAlchemy ORM** — abstração do banco com modelos relacionais
-- ✅ **Pydantic v2** — validação e serialização de dados na entrada e saída
-- 📧 **Resend** — envio de emails transacionais (recuperação de senha)
-- 👑 **Roles (admin/cliente)** — controle de acesso por perfil de usuário
+- ✅ **Pydantic v2** — validação e serialização de dados
+- 📧 **Resend** — envio de emails transacionais (boas-vindas, reset de senha)
+- 👑 **Roles (admin/cliente)** — controle de acesso por perfil
 - 📄 **Swagger/OpenAPI** — documentação gerada automaticamente
 
 ---
@@ -83,7 +84,9 @@ FRONTEND_URL=http://localhost:3000
 |---|---|---|---|
 | `POST` | `/auth/register` | Cadastrar novo cliente | ❌ |
 | `POST` | `/auth/login` | Login e geração de token JWT | ❌ |
+| `POST` | `/auth/google` | Login/cadastro via Google OAuth2 | ❌ |
 | `GET` | `/auth/me` | Dados do usuário autenticado | ✅ |
+| `PUT` | `/auth/me` | Atualizar dados do usuário | ✅ |
 | `POST` | `/auth/forgot-password` | Solicitar redefinição de senha | ❌ |
 | `GET` | `/auth/reset-password` | Validar token de redefinição | ❌ |
 | `POST` | `/auth/reset-password` | Redefinir senha via token de email | ❌ |
@@ -117,13 +120,14 @@ barber-booking-api/
 ├── database.py          # Configuração SQLAlchemy + engine PostgreSQL
 ├── models.py            # Modelos ORM (tabelas do banco)
 ├── schemas.py           # Schemas Pydantic (validação de entrada/saída)
-├── email_service.py     # Integração com Resend para envio de emails
+├── notifications.py     # Integração com Resend para envio de emails
 ├── routes/
-│   ├── auth.py          # Rotas: register, login, reset-password
+│   ├── auth.py          # Rotas: register, login, google, reset-password
 │   ├── clientes.py      # Rotas: CRUD de clientes
 │   └── agendamentos.py  # Rotas: criação, listagem, cancelamento e admin
 ├── requirements.txt     # Dependências do projeto
-├── .env.example         # Exemplo de variáveis de ambiente
+├── Procfile             # Configuração de inicialização Railway
+├── railway.json         # Configurações Railway
 └── README.md
 ```
 
@@ -140,9 +144,11 @@ barber-booking-api/
 | **Pydantic v2** | Validação e serialização de dados |
 | **python-jose** | Geração e validação de tokens JWT |
 | **passlib + bcrypt** | Hash seguro de senhas |
+| **httpx** | Validação do token Google OAuth2 |
 | **Resend** | Envio de emails transacionais |
 | **Uvicorn** | Servidor ASGI para produção e desenvolvimento |
 | **Railway** | Plataforma de deploy em nuvem |
+| **UptimeRobot** | Monitoramento de disponibilidade 24/7 |
 
 ---
 
