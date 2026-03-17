@@ -24,6 +24,13 @@ class GoogleLoginRequest(BaseModel):
     credential: str
 
 
+class GoogleTokenRequest(BaseModel):
+    access_token: str
+    email: str
+    nome: str
+    google_id: str
+
+
 @router.post("/register", response_model=ClienteResponse)
 def register(cliente: ClienteCreate, db: Session = Depends(get_db)):
     existente = db.query(Cliente).filter(Cliente.email == cliente.email).first()
@@ -57,7 +64,7 @@ def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get
 
 @router.post("/google", response_model=TokenResponse)
 def login_google(body: GoogleLoginRequest, db: Session = Depends(get_db)):
-    """Valida o token Google e retorna JWT da aplicação."""
+    """Valida o id_token Google (fluxo antigo) e retorna JWT da aplicação."""
     try:
         response = httpx.get(
             f"https://oauth2.googleapis.com/tokeninfo?id_token={body.credential}",
@@ -78,23 +85,16 @@ def login_google(body: GoogleLoginRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Email não retornado pelo Google.")
 
     cliente = db.query(Cliente).filter(Cliente.email == email).first()
-
     if cliente:
-        # Vincula google_id se ainda não estava vinculado
         if not cliente.google_id:
             cliente.google_id = google_id
             db.commit()
             db.refresh(cliente)
     else:
-        # Cria novo usuário via Google
         cliente = Cliente(
-            nome=nome,
-            email=email,
-            telefone="",
-            senha=None,
-            google_id=google_id,
-            role="cliente",
-            precisa_redefinir=False
+            nome=nome, email=email, telefone="",
+            senha=None, google_id=google_id,
+            role="cliente", precisa_redefinir=False
         )
         db.add(cliente)
         db.commit()
@@ -102,11 +102,49 @@ def login_google(body: GoogleLoginRequest, db: Session = Depends(get_db)):
         notification_service.sendWelcome(cliente)
 
     token = criar_token({"sub": cliente.email})
-    return {
-        "access_token": token,
-        "token_type": "bearer",
-        "precisa_redefinir": False
-    }
+    return {"access_token": token, "token_type": "bearer", "precisa_redefinir": False}
+
+
+@router.post("/google-token", response_model=TokenResponse)
+def login_google_token(body: GoogleTokenRequest, db: Session = Depends(get_db)):
+    """Recebe dados do usuário Google via userinfo e retorna JWT da aplicação."""
+    # Valida o access_token com o Google
+    try:
+        response = httpx.get(
+            "https://www.googleapis.com/oauth2/v3/userinfo",
+            headers={"Authorization": f"Bearer {body.access_token}"},
+            timeout=10
+        )
+        info = response.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Erro ao validar token Google.")
+
+    if "email" not in info:
+        raise HTTPException(status_code=401, detail="Token Google inválido.")
+
+    email = info["email"]
+    google_id = info["sub"]
+    nome = info.get("name", email)
+
+    cliente = db.query(Cliente).filter(Cliente.email == email).first()
+    if cliente:
+        if not cliente.google_id:
+            cliente.google_id = google_id
+            db.commit()
+            db.refresh(cliente)
+    else:
+        cliente = Cliente(
+            nome=nome, email=email, telefone="",
+            senha=None, google_id=google_id,
+            role="cliente", precisa_redefinir=False
+        )
+        db.add(cliente)
+        db.commit()
+        db.refresh(cliente)
+        notification_service.sendWelcome(cliente)
+
+    token = criar_token({"sub": cliente.email})
+    return {"access_token": token, "token_type": "bearer", "precisa_redefinir": False}
 
 
 @router.get("/me", response_model=ClienteResponse)
