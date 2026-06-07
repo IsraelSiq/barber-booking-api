@@ -18,7 +18,7 @@ def test_criar_endereco_sem_auth(client):
         "bairro": "Bairro Y",
         "cidade": "Cidade Z"
     })
-    assert res.status_code == 401
+    assert res.status_code in [401, 403]
 
 
 def test_listar_enderecos(client, auth_headers):

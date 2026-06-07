@@ -1,9 +1,9 @@
 import pytest
+from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from database import Base, get_db
-from main import app
 
 SQLALCHEMY_TEST_URL = "sqlite:///./test.db"
 
@@ -12,7 +12,18 @@ TestingSession = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 @pytest.fixture(scope="session", autouse=True)
-def setup_db():
+def mock_notifications():
+    """Mocka o notification_service para nao enviar emails reais nos testes."""
+    with patch("notifications.notification_service") as mock:
+        mock.sendWelcome = MagicMock()
+        mock.sendPasswordChanged = MagicMock()
+        mock.sendPasswordResetRequested = MagicMock()
+        yield mock
+
+
+@pytest.fixture(scope="session", autouse=True)
+def setup_db(mock_notifications):
+    from main import app  # importa depois do mock
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)
@@ -29,7 +40,8 @@ def db():
 
 
 @pytest.fixture()
-def client(db):
+def client(db, mock_notifications):
+    from main import app
     def override_get_db():
         yield db
     app.dependency_overrides[get_db] = override_get_db
@@ -40,9 +52,9 @@ def client(db):
 
 @pytest.fixture()
 def cliente_registrado(client):
-    """Registra um cliente e retorna email/senha."""
     payload = {
         "nome": "Israel Teste",
+        "telefone": "21999999999",
         "email": "israel@teste.com",
         "senha": "Senha123!"
     }
@@ -52,12 +64,13 @@ def cliente_registrado(client):
 
 @pytest.fixture()
 def cliente_token(client, cliente_registrado):
-    """Faz login e retorna o access_token JWT."""
     res = client.post("/auth/login", data={
         "username": cliente_registrado["email"],
         "password": cliente_registrado["senha"]
     })
-    return res.json().get("access_token")
+    token = res.json().get("access_token")
+    assert token is not None, f"Login falhou: {res.json()}"
+    return token
 
 
 @pytest.fixture()
